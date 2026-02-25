@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verdision Ultra</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers/dist/transformers.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg-start: #1e293b;
+      --bg-end: #0f172a;
+      --glass: rgba(255, 255, 255, 0.1);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --primary: #6366f1;
+      --primary-2: #8b5cf6;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+      --radius: 20px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 30% 30%, var(--bg-start), var(--bg-end));
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    canvas#gl {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -2;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.05) 0.7px, transparent 0.7px);
+      background-size: 3px 3px;
+      opacity: 0.25;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .container {
+      width: min(92%, 760px);
+      margin: 36px auto;
+      padding: 28px;
+      border-radius: var(--radius);
+      backdrop-filter: blur(18px);
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
+    }
+
+    p.subtitle {
+      margin-top: 8px;
+      margin-bottom: 20px;
+      color: var(--muted);
+    }
+
+    .inputs {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    input {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(15, 23, 42, 0.45);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 0.96rem;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input:focus {
+      border-color: rgba(99, 102, 241, 0.8);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    button {
+      flex: 1;
+      min-width: 180px;
+      padding: 13px;
+      border: none;
+      border-radius: 13px;
+      background: linear-gradient(45deg, var(--primary), var(--primary-2));
+      color: white;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.2s ease;
+    }
+
+    button.secondary {
+      background: linear-gradient(45deg, rgba(148,163,184,0.35), rgba(148,163,184,0.15));
+      border: 1px solid rgba(255,255,255,0.16);
+      font-weight: 600;
+    }
+
+    button:hover:enabled {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin: 6px 0 14px;
+      min-height: 1.1rem;
+    }
+
+    .result-card {
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 12px;
+    }
+
+    #result {
+      font-size: 1.15rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .confidence-wrap {
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      height: 10px;
+      overflow: hidden;
+    }
+
+    #confidence {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--warning), var(--success));
+      transition: width 0.4s ease;
+    }
+
+    #confidenceText {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    #explanation {
+      margin-top: 12px;
+      line-height: 1.45;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
+
+    .token-container {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .token {
+      display: inline-block;
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .chart-wrap {
+      margin-top: 16px;
+      border-radius: 12px;
+      background: rgba(15,23,42,0.35);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 10px;
+    }
+
+    #error {
+      margin-top: 10px;
+      color: #fecaca;
+      font-size: 0.88rem;
+      min-height: 1.1rem;
+    }
+
+    @media (max-width: 580px) {
+      .container {
+        padding: 20px;
+      }
+      .actions button {
+        min-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div class="noise"></div>
+
+  <main class="container">
+    <h1>Verdision Ultra</h1>
+    <p class="subtitle">AI-powered intelligent decision engine (robust mode).</p>
+
+    <div class="inputs">
+      <input id="a" maxlength="180" placeholder="Enter Option A" autocomplete="off" />
+      <input id="b" maxlength="180" placeholder="Enter Option B" autocomplete="off" />
+    </div>
+
+    <div class="actions">
+      <button id="decideBtn" type="button">Generate Verdict</button>
+      <button id="swapBtn" class="secondary" type="button">Swap Options</button>
+      <button id="clearBtn" class="secondary" type="button">Reset</button>
+    </div>
+
+    <div id="status" class="status" aria-live="polite">Loading AI model…</div>
+    <div id="error" role="alert" aria-live="assertive"></div>
+
+    <section class="result-card" aria-live="polite">
+      <div id="result">Verdict: —</div>
+      <div class="confidence-wrap"><div id="confidence"></div></div>
+      <div id="confidenceText">Confidence: 0%</div>
+      <div id="explanation">Provide both options and click “Generate Verdict”.</div>
+      <div id="tokens" class="token-container"></div>
+    </section>
+
+    <div class="chart-wrap">
+      <canvas id="chart" height="130"></canvas>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const state = {
+        generator: null,
+        modelReady: false,
+        historyA: 0,
+        historyB: 0,
+        running: false,
+        chart: null,
+      };
+
+      const els = {
+        inputA: document.getElementById('a'),
+        inputB: document.getElementById('b'),
+        decideBtn: document.getElementById('decideBtn'),
+        swapBtn: document.getElementById('swapBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+        status: document.getElementById('status'),
+        error: document.getElementById('error'),
+        result: document.getElementById('result'),
+        confidence: document.getElementById('confidence'),
+        confidenceText: document.getElementById('confidenceText'),
+        explanation: document.getElementById('explanation'),
+        tokens: document.getElementById('tokens'),
+      };
+
+      const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+      function normalizeInput(text) {
+        return (text || '').trim().replace(/\s+/g, ' ');
+      }
+
+      function setStatus(msg) {
+        els.status.textContent = msg;
+      }
+
+      function setError(msg = '') {
+        els.error.textContent = msg;
+      }
+
+      function setBusy(isBusy) {
+        state.running = isBusy;
+        els.decideBtn.disabled = isBusy;
+        els.swapBtn.disabled = isBusy;
+        els.clearBtn.disabled = isBusy;
+        els.decideBtn.textContent = isBusy ? 'Analyzing…' : 'Generate Verdict';
+      }
+
+      function bayesianScore(text) {
+        const words = text.split(' ').filter(Boolean);
+        const lengthScore = clamp(text.length / 80, 0, 1);
+        const diversity = clamp(new Set(words.map(w => w.toLowerCase())).size / Math.max(words.length, 1), 0, 1);
+        const sentimentHint = /\b(best|faster|safer|scalable|future|efficient|reliable|secure)\b/i.test(text) ? 0.08 : 0;
+        const prior = 0.5;
+        const likelihood = clamp((lengthScore * 0.45) + (diversity * 0.55) + sentimentHint, 0.05, 0.95);
+        return (likelihood * prior) / ((likelihood * prior) + ((1 - likelihood) * (1 - prior)));
+      }
+
+      function fallbackExplanation(a, b, winner, confidence) {
+        const loser = winner === a ? b : a;
+        const ratio = Math.round(confidence * 100);
+        return `Fallback reasoning (offline-safe):\n\n“${winner}” appears stronger than “${loser}” based on wording depth, uniqueness of terms, and decision clarity. Confidence is ${ratio}%. For critical decisions, pair this verdict with cost/risk analysis before finalizing.`;
+      }
+
+      async function typeText(text) {
+        els.explanation.textContent = '';
+        const content = text || '';
+        for (let i = 0; i < content.length; i++) {
+          els.explanation.textContent += content[i];
+          await new Promise(r => setTimeout(r, 8));
+        }
+      }
+
+      function tokenHeatmap(text) {
+        const words = text.split(' ').filter(Boolean);
+        els.tokens.innerHTML = '';
+
+        words.slice(0, 20).forEach((word) => {
+          const token = document.createElement('span');
+          const importance = clamp((word.length / 12) + (Math.random() * 0.25), 0.08, 1);
+          token.className = 'token';
+          token.style.background = `rgba(239,68,68,${importance * 0.65})`;
+          token.textContent = word;
+          els.tokens.appendChild(token);
+        });
+      }
+
+      function updateChart() {
+        state.chart.data.datasets[0].data = [state.historyA, state.historyB];
+        state.chart.update();
+      }
+
+      async function safeGenerate(prompt) {
+        if (!state.modelReady || !state.generator) {
+          throw new Error('Model not ready');
+        }
+        const out = await state.generator(prompt, {
+          max_new_tokens: 80,
+          temperature: 0.75,
+          top_p: 0.92,
+          repetition_penalty: 1.1,
+        });
+        return out?.[0]?.generated_text || '';
+      }
+
+      async function decide() {
+        if (state.running) return;
+        setError('');
+
+        const a = normalizeInput(els.inputA.value);
+        const b = normalizeInput(els.inputB.value);
+
+        if (!a || !b) {
+          setError('Please provide both Option A and Option B.');
+          return;
+        }
+
+        if (a.toLowerCase() === b.toLowerCase()) {
+          setError('Options are identical. Please provide two different choices.');
+          return;
+        }
+
+        setBusy(true);
+
+        try {
+          if (navigator.vibrate) navigator.vibrate(65);
+
+          const scoreA = bayesianScore(a);
+          const scoreB = bayesianScore(b);
+          const winner = scoreA >= scoreB ? a : b;
+          const confidence = clamp(Math.abs(scoreA - scoreB), 0.04, 0.98);
+
+          els.result.textContent = `Verdict: ${winner}`;
+          els.confidence.style.width = `${(confidence * 100).toFixed(1)}%`;
+          els.confidenceText.textContent = `Confidence: ${(confidence * 100).toFixed(1)}%`;
+
+          if (winner === a) {
+            state.historyA += 1;
+          } else {
+            state.historyB += 1;
+          }
+          updateChart();
+
+          const prompt = `Compare Option A: "${a}" and Option B: "${b}". Explain why "${winner}" is the stronger long-term choice in 4 concise sentences with practical reasoning.`;
+
+          let explanation = '';
+          try {
+            setStatus('Generating AI reasoning…');
+            explanation = await safeGenerate(prompt);
+          } catch {
+            setStatus('AI unavailable. Using robust fallback reasoning.');
+            explanation = fallbackExplanation(a, b, winner, confidence);
+          }
+
+          await typeText(explanation);
+          tokenHeatmap(winner);
+          setStatus('Done. You can run another comparison.');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function swap() {
+        if (state.running) return;
+        const temp = els.inputA.value;
+        els.inputA.value = els.inputB.value;
+        els.inputB.value = temp;
+      }
+
+      function resetAll() {
+        if (state.running) return;
+        els.inputA.value = '';
+        els.inputB.value = '';
+        els.result.textContent = 'Verdict: —';
+        els.confidence.style.width = '0%';
+        els.confidenceText.textContent = 'Confidence: 0%';
+        els.explanation.textContent = 'Provide both options and click “Generate Verdict”.';
+        els.tokens.innerHTML = '';
+        state.historyA = 0;
+        state.historyB = 0;
+        updateChart();
+        setError('');
+        setStatus(state.modelReady ? 'Model ready.' : 'Model still loading…');
+      }
+
+      async function initModel() {
+        if (!window.transformers?.pipeline) {
+          setStatus('Transformers library unavailable. Fallback mode enabled.');
+          return;
+        }
+
+        try {
+          setStatus('Loading AI model… (first load may take a bit)');
+          state.generator = await window.transformers.pipeline('text-generation', 'Xenova/distilgpt2', { quantized: true });
+          state.modelReady = true;
+          setStatus('Model ready.');
+        } catch (err) {
+          console.error(err);
+          state.modelReady = false;
+          setStatus('Model failed to load. Fallback mode enabled.');
+        }
+      }
+
+      function initChart() {
+        state.chart = new Chart(document.getElementById('chart'), {
+          type: 'bar',
+          data: {
+            labels: ['Option A wins', 'Option B wins'],
+            datasets: [{
+              label: 'Historical Verdict Count',
+              data: [0, 0],
+              backgroundColor: ['rgba(99,102,241,0.65)', 'rgba(139,92,246,0.65)'],
+              borderColor: ['rgba(129,140,248,1)', 'rgba(167,139,250,1)'],
+              borderWidth: 1,
+              borderRadius: 8,
+            }],
+          },
+          options: {
+            responsive: true,
+            animation: false,
+            plugins: { legend: { labels: { color: '#e2e8f0' } } },
+            scales: {
+              x: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,0.08)' } },
+              y: { beginAtZero: true, ticks: { color: '#cbd5e1', precision: 0 }, grid: { color: 'rgba(255,255,255,0.08)' } },
+            },
+          },
+        });
+      }
+
+      function initBackground() {
+        const canvas = document.getElementById('gl');
+        const gl = canvas.getContext('webgl');
+        if (!gl) return;
+
+        function resize() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+          gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+
+        const vert = `attribute vec4 position; void main(){ gl_Position = position; }`;
+        const frag = `precision mediump float;
+uniform float time;
+uniform vec2 resolution;
+void main(){
+  vec2 uv = gl_FragCoord.xy / resolution.xy;
+  float wave = sin((uv.x * 11.0) + (time * 1.1)) * 0.08 + cos((uv.y * 9.0) - (time * 0.8)) * 0.05;
+  float glow = smoothstep(0.9, 0.2, distance(uv, vec2(0.2, 0.25)));
+  gl_FragColor = vec4(0.07 + wave + glow * 0.06, 0.11 + glow * 0.05, 0.22 + wave, 1.0);
+}`;
+
+        function compile(type, source) {
+          const shader = gl.createShader(type);
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+          return shader;
+        }
+
+        const program = gl.createProgram();
+        gl.attachShader(program, compile(gl.VERTEX_SHADER, vert));
+        gl.attachShader(program, compile(gl.FRAGMENT_SHADER, frag));
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1, -1, 1, -1, -1, 1,
+          -1, 1, 1, -1, 1, 1,
+        ]), gl.STATIC_DRAW);
+
+        const pos = gl.getAttribLocation(program, 'position');
+        gl.enableVertexAttribArray(pos);
+        gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+        const timeLoc = gl.getUniformLocation(program, 'time');
+        const resLoc = gl.getUniformLocation(program, 'resolution');
+
+        function render(t) {
+          gl.uniform1f(timeLoc, t * 0.001);
+          gl.uniform2f(resLoc, canvas.width, canvas.height);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+          requestAnimationFrame(render);
+        }
+
+        resize();
+        window.addEventListener('resize', resize);
+        requestAnimationFrame(render);
+      }
+
+      function bindEvents() {
+        els.decideBtn.addEventListener('click', decide);
+        els.swapBtn.addEventListener('click', swap);
+        els.clearBtn.addEventListener('click', resetAll);
+
+        [els.inputA, els.inputB].forEach(input => {
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') decide();
+          });
+        });
+      }
+
+      function init() {
+        initChart();
+        initBackground();
+        bindEvents();
+        initModel();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
